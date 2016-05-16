@@ -1,0 +1,36 @@
+PPORT=4455 #ovs remote port
+#CT = control
+#DT = data
+
+JJCAP00_CT_IP=
+JJCAP00_DT_IP=
+
+THCAP00_CT_IP=
+THCAP00_DT_IP=
+
+MYCAP00_CT_IP=
+MYCAP00_DT_IP=
+MY2CAP00_CT_IP=
+MY2CAP00_DT_IP=
+
+IDCAP00_CT_IP=
+IDCAP00_DT_IP=
+
+PHCAP00_CT_IP=
+PHCAP00_DT_IP=
+
+VTCAP00_CT_IP=
+VTCAP00_DT_IP=
+
+GJCAP00_CT_IP=  #GIST ovs capsulator control
+GJCAP00_DT_IP= #GIST ovs capsulator data
+
+GJCAP01_CT_IP=  #Narinet control
+GJCAP01_DT_IP=  #Narinet data
+
+GISTCAP00_CT_IP=  #Narinet control
+GISTCAP00_DT_IP=  #Narinet data
+
+PKCAP00_CT_IP=
+PKCAP00_DT_IP=
+
