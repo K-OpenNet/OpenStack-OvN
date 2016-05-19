@@ -1,5 +1,4 @@
 # OpenStack-OvN: Overlay vNetworking Manager for Multi-region OpenStack Cloud
-====================================
 
 ### What is OpenStack-OvN?
 OpenStack-OvN is a DevOps tool for automated provisioning of VXLAN-based Overlay vNetworking 
