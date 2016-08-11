@@ -1,0 +1,19 @@
+---
+Box:
+  boxname: C1-GJ1
+  ipaddress: 210.114.90.3
+  accountid: netcs
+
+Bridges:
+  - bridgename: testbr1
+    controllerip: 210.114.90.12
+    ports:
+      - portname: br1_to_br2
+        type: patch
+        peerport: br2_to_br1
+  - bridgename: testbr2
+    controllerip: 210.114.90.12
+    ports:
+      - portname: br2_to_br1
+        type: patch
+        peerport: br1_to_br2

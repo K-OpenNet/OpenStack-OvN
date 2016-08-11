@@ -1,0 +1,72 @@
+{
+  "box": {
+    "hostname": "ovn_test-2",
+    "ipaddr": "10.0.200.8",
+    "user": "ubuntu",
+    "ovsdb_port": "4455"
+  },
+  "bridges": [
+    {
+      "name": "testbr1",
+      "type": "bridge",
+      "controller": "10.0.200.10",
+      "dpid": "00:00:00:00:00:00:11:13",
+      "ports": [
+        {
+          "name": "tp01",
+          "type": "internal"
+        },
+        {
+          "name": "ptp01",
+          "type": "patch"
+        },
+        {
+          "name": "tbr1_to_tbr2",
+          "type": "patch",
+          "optios": {
+            "peer": "tbr2_to_tbr1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "testbr2",
+      "type": "bridge",
+      "controller": "10.0.200.10",
+      "dpid": "00:00:00:00:00:00:11:14",
+      "ports": [
+        {
+          "name": "testp1",
+          "type": "internal"
+        },
+        {
+          "name": "tbr2_to_tbr1",
+          "type": "patch",
+          "options": {
+            "peer": "tbr1_to_tbr2"
+          }
+        }
+      ]
+    }
+  ],
+  "tunnels": [
+    {
+      "name": "test1_to_test2",
+      "bridge": "testbr1",
+      "type": "vxlan",
+      "peer_box": "ovn_test-2",
+      "options": {
+        "local_ip": "10.0.200.8",
+        "remote_ip": "10.0.200.9"
+      }
+    }
+  ],
+  "flows": [
+    {
+      "name": "flow1",
+      "bridge": "testbr1",
+      "match":[{"in_port":"tp01"}],
+      "actions":[{"out_port":"tbr1_to_tbr2"}]
+    }
+  ]
+}
