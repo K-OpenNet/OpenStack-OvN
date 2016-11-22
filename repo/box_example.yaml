@@ -1,0 +1,6 @@
+-
+  hostname: <Required>
+  ipaddr: <Required>
+  linux_account:
+    id: <Required>
+    password: <Required>

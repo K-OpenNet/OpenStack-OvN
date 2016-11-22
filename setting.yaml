@@ -1,0 +1,2 @@
+box_config_file: repo/box.yaml
+networking_template_file: repo/template.yaml
