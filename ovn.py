@@ -5,19 +5,23 @@ import shlex
 import os
 
 import layer2_bridge
+import layer2_flow
 
 
 class OvN:
     def __init__(self):
         self._setting = None
         self.logger = None
+
         self._bridge_control = None
+        self._flow_control = None
 
         self.initialize_controller()
         self.initialize_logger()
 
     def initialize_controller(self):
-        self._bridge_control = layer2_bridge.BridgeController()
+        self._bridge_control = layer2_bridge.L2BridgeController()
+        self._flow_control = layer2_flow.L2FlowController()
 
     def initialize_logger(self):
         self.logger = logging.getLogger(__name__)
@@ -49,8 +53,6 @@ class OvN:
         if not self._setting:
             exit(1)
 
-        # Parse box configuration file
-        # Parse networking template file one by one
         try:
             net_template = self.yaml_parser(
                 self._setting['networking_template_file'])
@@ -62,9 +64,6 @@ class OvN:
             if net['type'] in ['patch', 'vxlan']:
                 self.config_ovs(net)
 
-        # make bridge
-        # make port
-
     def config_ovs(self, __ovs):
         self.logger.debug("Configure OVS, config: " + __ovs.__str__())
 
@@ -72,6 +71,7 @@ class OvN:
         self.check_ovs_format()
 
         try:
+            # Split box and bridge
             end1 = __ovs['end1'].split('.')
             end2 = __ovs['end2'].split('.')
 
@@ -81,9 +81,11 @@ class OvN:
             end1_bridge = end1[1]
             end2_bridge = end2[1]
 
+            # Load box configuration
             box1 = self.get_box(end1_name)
             box2 = self.get_box(end2_name)
 
+            # Check Box connectivity
             if self.check_box_connect(box1['ipaddr']) is 1 \
                     or self.check_box_connect(box2['ipaddr']) is 1:
                 return None
@@ -100,8 +102,38 @@ class OvN:
             self.logger.error(exc.message)
             return None
 
+        # Add a bridge
         self._bridge_control.add_bridge(box1['ipaddr'], end1_bridge)
-        self._bridge_control.add_bridge(box1['ipaddr'], end2_bridge)
+        self._bridge_control.add_bridge(box2['ipaddr'], end2_bridge)
+
+        # Add a port pair
+        if __ovs['type'] == "patch":
+            box1_port = end1_bridge + "_to_" + end2_bridge
+            box2_port = end2_bridge + "_to_" + end1_bridge
+            self._bridge_control.add_patch_port_pair(
+                                                    __box1_ip=box1['ipaddr'],
+                                                    __box1_br=end1_bridge,
+                                                    __box1_port=box1_port,
+                                                    __box2_ip=box2['ipaddr'],
+                                                    __box2_br=end2_bridge,
+                                                    __box2_port=box2_port)
+        elif __ovs['type'] == "vxlan":
+            box1_port = end1_name + "_to_" + end2_name
+            box2_port = end2_name + "_to_" + end1_name
+            self._bridge_control.add_vxlan_port_pair(
+                                            __box1_ip=box1['ipaddr'],
+                                            __box1_vtep_ip=box1['vtep_ipaddr'],
+                                            __box1_br=end1_bridge,
+                                            __box1_port=box1_port,
+                                            __box2_ip=box2['ipaddr'],
+                                            __box2_vtep_ip=box2['vtep_ipaddr'],
+                                            __box2_br=end2_bridge,
+                                            __box2_port=box2_port)
+
+    def configure_l2flow(self, __ovs):
+        self.logger.debug("Configure L2 Flow for OVS, config: "
+                          + __ovs.__str__())
+
 
     def check_ovs_format(self, __ovs):
         # Need to implement

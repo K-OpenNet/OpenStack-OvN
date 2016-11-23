@@ -3,10 +3,10 @@ import subprocess
 import shlex
 
 
-class BridgeController:
+class L2BridgeController:
     def __init__(self):
         self.logger = None
-        pass
+        self.initialize_logger()
 
     def initialize_logger(self):
         self.logger = logging.getLogger(__name__)
@@ -43,9 +43,65 @@ class BridgeController:
         self.logger.debug(str(returncode) + cmdout + cmderr)
         return returncode
 
-    def add_port_pair(self, __box1, __box2):
-        # need to implement
-        pass
+    def add_patch_port_pair(self,
+                            __box1_ip, __box1_br, __box1_port,
+                            __box2_ip, __box2_br, __box2_port):
+
+        self.add_port(__box1_ip, __box1_br, __box1_port)
+        self.add_port(__box2_ip, __box2_br, __box2_port)
+
+        self.set_patch_option(__box1_ip, __box1_port, __box2_port)
+        self.set_patch_option(__box2_ip, __box2_port, __box1_port)
+
+    def add_vxlan_port_pair(self,
+                            __box1_ip, __box1_vtep_ip, __box1_br, __box1_port,
+                            __box2_ip, __box2_vtep_ip, __box2_br, __box2_port,
+                            __vni="33333"):
+
+        self.add_port(__box1_ip, __box1_br, __box1_port)
+        self.add_port(__box2_ip, __box2_br, __box2_port)
+
+        self.set_vxlan_option(__box1_ip, __box1_port, __box2_vtep_ip, __vni)
+        self.set_vxlan_option(__box2_ip, __box2_port, __box1_vtep_ip, __vni)
+
+    def add_port(self, __box_ip, __bridge, __port):
+        remote_port = "6640"
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + __box_ip + ":" + remote_port,
+                   "add-port",
+                   __bridge,
+                   __port]
+        (returncode, cmdout, cmderr) = self.shell_command(command)
+        self.logger.debug(str(returncode) + cmdout + cmderr)
+
+        return returncode, cmdout, cmderr
+
+    def set_patch_option(self, __box_ip, __port, __peer_port):
+        remote_port = "6640"
+
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + __box_ip + ":" + remote_port,
+                   "set interface", __port,
+                   "type=patch",
+                   "options:" + "peer=" + __peer_port]
+        (returncode, cmdout, cmderr) = self.shell_command(command)
+        self.logger.debug(str(returncode) + cmdout + cmderr)
+
+        return returncode, cmdout, cmderr
+
+    def set_vxlan_option(self, __box_ip, __port, __peer_ip, __vni):
+        remote_port = "6640"
+
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + __box_ip + ":" + remote_port,
+                   "set interface", __port,
+                   "type=vxlan",
+                   "options:", "key=" + __vni,
+                   "options:", "remote_ip=" + __peer_ip]
+        (returncode, cmdout, cmderr) = self.shell_command(command)
+        self.logger.debug(str(returncode) + cmdout + cmderr)
+
+        return returncode, cmdout, cmderr
 
     def shell_command(self, __cmd):
         self.logger.debug("Shell command: " + __cmd.__str__())
