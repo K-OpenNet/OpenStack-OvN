@@ -1,7 +1,7 @@
-- end1: K1-GJ1-Small1.br-test1
-  end2: K1-GJ1-Small1.br-test2
+- end1: test.br-test1
+  end2: test.br-test2
   type: patch
 
-- end1: K1-GJ1-Small1.br-test2
-  end2: K1-GJ1-Small1.br-test3
+- end1: test.br-test2
+  end2: test.br-test3
   type: patch
