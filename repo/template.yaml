@@ -1,7 +1,7 @@
-- end1: test.br-test1
-  end2: test.br-test2
+- end1: ovs-test.br-test1
+  end2: ovs-test.br-test2
   type: patch
 
-- end1: test.br-test2
-  end2: test.br-test3
+- end1: ovs-test.br-test2
+  end2: ovs-test.br-test3
   type: patch

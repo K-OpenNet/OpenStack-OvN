@@ -1,5 +1,5 @@
 -
-  hostname: ovs-config
+  hostname: ovs-test
   ipaddr: 10.246.67.241
   linux_account:
     id: test
