@@ -7,6 +7,8 @@ import util
 class OvN:
     def __init__(self):
         self._setting = None
+        self._net_template = None
+        self._box_config = None
         self.logger = None
         self._util = None
 
@@ -32,52 +34,56 @@ class OvN:
             self.logger.addHandler(ch)
 
     def start(self):
-        net_template = None
+        # Load OvN Setting File
         self._setting = self._util.yaml_parser("setting.yaml")
 
         if not self._setting:
             exit(1)
 
+        # Load Networking Template File
         try:
-            net_template = self._util.yaml_parser(self._setting['networking_template_file'])
+            self._net_template = self._util.yaml_parser(self._setting['networking_template_file'])
         except AttributeError, exc:
             self.logger.error(exc.message)
             exit(1)
 
-        for net in net_template:
+        # Load Box Configuration File
+        try:
+            self._box_config = self._util.yaml_parser(self._setting['box_config_file'])
+        except AttributeError, exc:
+            self.logger.error(exc.message)
+            exit(1)
+
+        self.provision()
+
+    def provision(self):
+        for net in self._net_template:
             if net['type'] in ['patch', 'vxlan']:
-                parse_net = self._bridge_control.parse_ovs(net)
-                box1 = self.get_box(parse_net['end1_name'])
-                box2 = self.get_box(parse_net['end2_name'])
-                if not box1 or not box2:
+                ovs_config = self._bridge_control.parse_ovs(net)
+
+                box1_config = self.get_box_config(ovs_config['end1_name'])
+                box2_config = self.get_box_config(ovs_config['end2_name'])
+                if not box1_config or not box2_config:
                     continue
-                parse_net['end1_ipaddr'] = box1['ipaddr']
-                parse_net['end2_ipaddr'] = box2['ipaddr']
 
-                # self._bridge_control.clear_bridges(parse_net['end1_ipaddr'])
-                # self._bridge_control.clear_bridges(parse_net['end2_ipaddr'])
-                self._bridge_control.config_ovs(parse_net)
+                ovs_config['end1_ipaddr'] = box1_config['ipaddr']
+                ovs_config['end2_ipaddr'] = box2_config['ipaddr']
 
-    def configure_l2flow(self, __ovs):
-        self.logger.debug("Configure L2 Flow for OVS, config: "
-                          + __ovs.__str__())
+                self._bridge_control.config_ovs(ovs_config)
 
-    def get_box(self, __hostname):
-        box_config = None
-        try:
-            box_config = self._util.yaml_parser(self._setting['box_config_file'])
-        except AttributeError, exc:
-            self.logger.error(exc.message)
-            exit(1)
+            elif net['type'] is "flow":
+                self.logger.debug("Provision() - Configure L2 Flow for OVS, config: "
+                                  + net.__str__())
+                self.logger.debug("Not yet implemented")
 
-        for box in box_config:
-            if box['hostname'] == __hostname:
+    def get_box_config(self, hostname):
+        for box in self._box_config:
+            if box['hostname'] == hostname:
                 self.logger.debug("get_box(): \n" + box.__str__())
                 return box
 
         self.logger.error("In " + self._setting['box_config_file'] +
-                          ", Box is not defined: " +
-                          __hostname)
+                          ", Box is not defined: " + hostname)
         return None
 
 if __name__ == "__main__":

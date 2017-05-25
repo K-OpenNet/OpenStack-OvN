@@ -1,11 +1,13 @@
 import logging
 import util
+import ifaces.ovsdb_api as ovsdb
 
 
 class L2BridgeController:
     def __init__(self):
         self.logger = None
         self.initialize_logger()
+        self._bridge = ovsdb.OVSDB_API()
         self._util = util.Utils()
 
     def initialize_logger(self):
@@ -17,46 +19,45 @@ class L2BridgeController:
         ch.setFormatter(fm)
         self.logger.addHandler(ch)
 
-    def parse_ovs(self, __ovs):
-        self.logger.debug("Parse Networking Template for OVS, config: " + __ovs.__str__())
+    def parse_ovs(self, ovs_config):
+        self.logger.debug("Parse Networking Template for OVS, config: " + ovs_config.__str__())
 
         try:
             # Split box and bridge
-            end1 = __ovs['end1'].split('.')
-            end2 = __ovs['end2'].split('.')
+            end1 = ovs_config['end1'].split('.')
+            end2 = ovs_config['end2'].split('.')
 
-            __ovs['end1_name'] = end1[0]
-            __ovs['end2_name'] = end2[0]
+            ovs_config['end1_name'] = end1[0]
+            ovs_config['end1_bridge'] = end1[1]
 
-            __ovs['end1_bridge'] = end1[1]
-            __ovs['end2_bridge'] = end2[1]
+            ovs_config['end2_name'] = end2[0]
+            ovs_config['end2_bridge'] = end2[1]
 
-            return __ovs
+            return ovs_config
 
         except AttributeError, exc:
             self.logger.error(exc.message)
             return None
 
-    def config_ovs(self, __ovs):
-        self.logger.debug("Configure OVS, config: " + __ovs.__str__())
+    def config_ovs(self, ovs_config):
+        self.logger.debug("Configure OVS, config: " + ovs_config.__str__())
 
         # Need to add codes to check valid OVS configuration format
-        self.check_ovs_format(__ovs)
+        self.check_ovs_format(ovs_config)
 
         try:
             # Split box and bridge
-            end1_ipaddr = __ovs['end1_ipaddr']
-            end2_ipaddr = __ovs['end2_ipaddr']
+            end1_ipaddr = ovs_config['end1_ipaddr']
+            end1_name = ovs_config['end1_name']
+            end1_bridge = ovs_config['end1_bridge']
 
-            end1_name = __ovs['end1_name']
-            end2_name = __ovs['end2_name']
-
-            end1_bridge = __ovs['end1_bridge']
-            end2_bridge = __ovs['end2_bridge']
+            end2_ipaddr = ovs_config['end2_ipaddr']
+            end2_name = ovs_config['end2_name']
+            end2_bridge = ovs_config['end2_bridge']
 
             # Check Box connectivity
-            if self.check_box_connect(end1_ipaddr) is 1 \
-                    or self.check_box_connect(end2_ipaddr) is 1:
+            if self._util.check_box_connect(end1_ipaddr) is 1 \
+                    or self._util.check_box_connect(end2_ipaddr) is 1:
                 return None
 
             if self.check_remote_ovsdb(end1_ipaddr) is 1:
@@ -72,25 +73,41 @@ class L2BridgeController:
             return None
 
         # Add a bridge
-        self.add_bridge(end1_ipaddr, end1_bridge)
-        self.add_bridge(end2_ipaddr, end2_bridge)
+        self._bridge.create_bridge(end1_ipaddr, end1_bridge)
+        self._bridge.create_bridge(end2_ipaddr, end2_bridge)
 
-        # Add a port pair
-        if __ovs['type'] == "patch":
-            box1_port = end1_bridge + "_to_" + end2_bridge
-            box2_port = end2_bridge + "_to_" + end1_bridge
-            self.add_patch_port_pair(
-                end1_ipaddr, end1_bridge, box1_port,
-                end2_ipaddr, end2_bridge, box2_port)
+        self._bridge.update_bridge_controller(end1_ipaddr, end1_bridge, "10.246.67.127")
+        self._bridge.update_bridge_controller(end2_ipaddr, end2_bridge, "10.246.67.127")
 
-        elif __ovs['type'] == "vxlan":
+        # Create Patch Port Pair
+        if ovs_config['type'] == "patch":
+            box1_port = str(end1_bridge).strip("br").strip("-") + "_2_" + str(end2_bridge).strip("br").strip("-")
+            box2_port = str(end2_bridge).strip("br").strip("-") + "_2_" + str(end1_bridge).strip("br").strip("-")
+
+            self._bridge.create_port(end1_ipaddr, end1_bridge, box1_port)
+            self._bridge.update_port_type(end1_ipaddr, box1_port, "patch")
+            self._bridge.update_port_option(end1_ipaddr, box1_port, "peer", box2_port)
+
+            self._bridge.create_port(end2_ipaddr, end2_bridge, box2_port)
+            self._bridge.update_port_type(end2_ipaddr, box2_port, "patch")
+            self._bridge.update_port_option(end2_ipaddr, box2_port, "peer", box1_port)
+
+        # Create VxLAN Port Pair
+        elif ovs_config['type'] == "vxlan":
             box1_port = end1_name + "_to_" + end2_name
             box2_port = end2_name + "_to_" + end1_name
-            end1_vtep = __ovs['end1_vtep']
-            end2_vtep = __ovs['end2_vtep']
-            self.add_vxlan_port_pair(
-                end1_ipaddr, end1_bridge, box1_port, end2_vtep,
-                end2_ipaddr, end2_bridge, box2_port, end1_vtep)
+            end1_vtep = ovs_config['end1_vtep']
+            end2_vtep = ovs_config['end2_vtep']
+
+            self._bridge.create_port(end1_ipaddr, end1_bridge, box1_port)
+            self._bridge.update_port_type(end1_ipaddr, box1_port, "patch")
+            self._bridge.update_port_option(end1_ipaddr, box1_port, "key", 33333)
+            self._bridge.update_port_option(end1_ipaddr, box1_port, "remote_ip", end1_vtep)
+
+            self._bridge.create_port(end2_ipaddr, end2_bridge, box2_port)
+            self._bridge.update_port_type(end2_ipaddr, box2_port, "patch")
+            self._bridge.update_port_option(end2_ipaddr, box2_port, "key", 33333)
+            self._bridge.update_port_option(end2_ipaddr, box2_port, "remote_ip", end2_vtep)
 
     def check_remote_ovsdb(self, __remote_ip):
         remote_port = "6640"
@@ -106,98 +123,6 @@ class L2BridgeController:
 
         return returncode, cmdout, cmderr
 
-    def add_bridge(self, __remote_ip, __bridge):
-        remote_port = "6640"
-        command = ["ovs-vsctl",
-                   "--db=tcp:"+__remote_ip+":"+remote_port,
-                   "add-br",
-                   __bridge]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        return returncode
-
-    def add_patch_port_pair(self,
-                            __box1_ip, __box1_br, __box1_port,
-                            __box2_ip, __box2_br, __box2_port):
-
-        self.add_port(__box1_ip, __box1_br, __box1_port)
-        self.add_port(__box2_ip, __box2_br, __box2_port)
-
-        self.set_patch_option(__box1_ip, __box1_port, __box2_port)
-        self.set_patch_option(__box2_ip, __box2_port, __box1_port)
-
-    def add_vxlan_port_pair(self,
-                            __box1_ip, __box1_br, __box1_port,  __box2_vtep_ip,
-                            __box2_ip, __box2_br, __box2_port, __box1_vtep_ip,
-                            __vni="33333"):
-
-        self.add_port(__box1_ip, __box1_br, __box1_port)
-        self.add_port(__box2_ip, __box2_br, __box2_port)
-
-        self.set_vxlan_option(__box1_ip, __box1_port, __box2_vtep_ip, __vni)
-        self.set_vxlan_option(__box2_ip, __box2_port, __box1_vtep_ip, __vni)
-
-    def add_port(self, __box_ip, __bridge, __port):
-        remote_port = "6640"
-        command = ["ovs-vsctl",
-                   "--db=tcp:" + __box_ip + ":" + remote_port,
-                   "add-port",
-                   __bridge,
-                   __port]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        return returncode, cmdout, cmderr
-
-    def set_patch_option(self, __box_ip, __port, __peer_port):
-        remote_port = "6640"
-
-        command = ["ovs-vsctl",
-                   "--db=tcp:" + __box_ip + ":" + remote_port,
-                   "set", "interface", __port,
-                   "type=patch",
-                   "options:peer=" + __peer_port]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        return returncode, cmdout, cmderr
-
-    def set_vxlan_option(self, __box_ip, __port, __peer_ip, __vni):
-        remote_port = "6640"
-
-        command = ["ovs-vsctl",
-                   "--db=tcp:" + __box_ip + ":" + remote_port,
-                   "set", "interface", __port,
-                   "type=vxlan",
-                   "options:", "key=" + __vni,
-                   "options:", "remote_ip=" + __peer_ip]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        return returncode, cmdout, cmderr
-
-    def check_box_connect(self, __remote_ip):
-        command = ["ping", "-c 1", "-W 1", __remote_ip]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        if returncode is 0:
-            self.logger.info("Box is connectable: " + __remote_ip)
-        elif returncode is 1:
-            self.logger.error("Box is not connectable: " + __remote_ip)
-        return returncode
-
-    def clear_bridges(self, __box_ip):
-        remote_port = "6640"
-        command = ["ovs-vsctl",
-                   "--db=tcp:" + __box_ip + ":" + remote_port,
-                   "list-br"]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
-
-        for br in cmdout.splitlines():
-            command = ["ovs-vsctl",
-                       "--db=tcp:" + __box_ip + ":" + remote_port,
-                       "del-br", br]
-            (returncode, cmdout, cmderr) = self._util.shell_command(command)
-            if returncode is 0:
-                self.logger.info("Bridge is deleted: " + br)
-
     def config_remote_ovsdb(self, __box):
         # Need to implement
         pass
@@ -205,3 +130,7 @@ class L2BridgeController:
     def check_ovs_format(self, __ovs):
         # Need to implement
         pass
+
+if __name__ == "__main__":
+    tmp = "br-test"
+    print str(tmp).strip("br").strip("-")

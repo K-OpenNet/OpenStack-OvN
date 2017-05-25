@@ -2,6 +2,7 @@ import logging
 import yaml
 import subprocess
 import shlex
+import json
 
 
 class Utils:
@@ -33,6 +34,17 @@ class Utils:
                                        + " (Position: line %s, column %s)" %
                                        (mark.line + 1, mark.column + 1)))
                     return None
+
+    def check_box_connect(self, __remote_ip):
+        command = ["ping", "-c 1", "-W 1", __remote_ip]
+        (returncode, cmdout, cmderr) = self.shell_command(command)
+
+        if returncode is 0:
+            self.logger.info("Box is connectable: " + __remote_ip)
+        elif returncode is 1:
+            self.logger.error("Box is not connectable: " + __remote_ip)
+        return returncode
+
 
     def shell_command(self, __cmd):
         self.logger.debug("Shell command: " + __cmd.__str__())
