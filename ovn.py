@@ -58,23 +58,45 @@ class OvN:
 
     def provision(self):
         for net in self._net_template:
-            if net['type'] in ['patch', 'vxlan']:
-                ovs_config = self._bridge_control.parse_ovs(net)
+            if net['type'] in ['bridge']:
+                ovs_config = net
 
+                box_config = self.get_box_config(ovs_config['target'])
+                if not box_config:
+                    self.logger.warn("provision(), there is no box with the name " + ovs_config['target'])
+                    continue
+                ovs_config['target_ipaddr'] = box_config['ipaddr']
+                self._bridge_control.config_l2bridge(ovs_config)
+
+            elif net['type'] in ['patch', 'vxlan']:
+                # Parsing Template via controller
+                ovs_config = self._bridge_control.parse_ovs_port(net)
+
+                # Fill Box specific information (Controllers can't access to box information)
                 box1_config = self.get_box_config(ovs_config['end1_name'])
                 box2_config = self.get_box_config(ovs_config['end2_name'])
                 if not box1_config or not box2_config:
                     continue
-
                 ovs_config['end1_ipaddr'] = box1_config['ipaddr']
                 ovs_config['end2_ipaddr'] = box2_config['ipaddr']
 
-                self._bridge_control.config_ovs(ovs_config)
+                # Trigger configuration
+                self._bridge_control.config_l2bridge(ovs_config)
 
             elif net['type'] is "flow":
                 self.logger.debug("Provision() - Configure L2 Flow for OVS, config: "
                                   + net.__str__())
                 self.logger.debug("Not yet implemented")
+
+                # Parsing Template via controller
+                flow_config = self._flow_control.parse_flow_config(net)
+
+                # Fill Box specific information (Controllers can't access to box information)
+                flow_config['end1_ipaddr'] = box1_config['ipaddr']
+                flow_config['end2_ipaddr'] = box2_config['ipaddr']
+
+                # Trigger configuration
+                self._flow_control.config_l2flow(flow_config)
 
     def get_box_config(self, hostname):
         for box in self._box_config:

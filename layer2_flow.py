@@ -7,7 +7,6 @@ class L2FlowController:
     def __init__(self):
         self._sdn_ipaddr = None
         self.logger = None
-
         self.initialize_logger()
 
     def initialize_logger(self):
@@ -21,6 +20,34 @@ class L2FlowController:
 
     def initialize_setting(self, __sdn_ip):
         self._sdn_ipaddr = __sdn_ip
+
+    def parse_flow_config(self, flow_config):
+        # Need to parse host_ip, bridge, table_id, inport, outport
+        # host_ip <- filled by "ovn.py"
+
+
+        self.logger.debug("Parse Networking Template for OVS, config: " + flow_config.__str__())
+
+        try:
+            # Split box and bridge
+            end1 = flow_config['end1'].split('.')
+            end2 = flow_config['end2'].split('.')
+
+            flow_config['end1_name'] = end1[0]
+            flow_config['end1_bridge'] = end1[1]
+
+            flow_config['end2_name'] = end2[0]
+            flow_config['end2_bridge'] = end2[1]
+
+            return flow_config
+
+        except AttributeError, exc:
+            self.logger.error(exc.message)
+            return None
+        pass
+
+    def config_l2flow(self, flow_config):
+        pass
 
     def set_patch_flow(self):
         # Get DPIDs of bridge1 and bridge 2

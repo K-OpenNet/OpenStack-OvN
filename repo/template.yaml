@@ -1,7 +1,6 @@
-- end1: ovs-test.br-test1
-  end2: ovs-test.br-test2
-  type: patch
-
-- end1: ovs-test.br-test2
-  end2: ovs-test.br-test3
-  type: patch
+- type: bridge
+  target: ovs-test
+  bridge:
+    - br-test1
+    - br-test2
+    - br-test3

@@ -19,7 +19,11 @@ class L2BridgeController:
         ch.setFormatter(fm)
         self.logger.addHandler(ch)
 
-    def parse_ovs(self, ovs_config):
+    def parse_ovs_bridge(self, ovs_config):
+        # In current situation, there no parts which is needed to be parsed
+        pass
+
+    def parse_ovs_port(self, ovs_config):
         self.logger.debug("Parse Networking Template for OVS, config: " + ovs_config.__str__())
 
         try:
@@ -39,12 +43,44 @@ class L2BridgeController:
             self.logger.error(exc.message)
             return None
 
-    def config_ovs(self, ovs_config):
+    def config_l2bridge(self, ovs_config):
         self.logger.debug("Configure OVS, config: " + ovs_config.__str__())
 
         # Need to add codes to check valid OVS configuration format
         self.check_ovs_format(ovs_config)
 
+        if ovs_config['type'] == "bridge":
+            self.configure_ovs_bridges(ovs_config)
+        elif ovs_config['type'] in ['vxlan','patch']:
+            self.configure_ovs_ports(ovs_config)
+
+    def configure_ovs_bridges(self, ovs_config):
+        try:
+            # Split box and bridge
+            target_ipaddr = ovs_config['target_ipaddr']
+            brlist = ovs_config['bridge']
+
+            # Check Box connectivity
+            if self._util.check_box_connect(target_ipaddr) is 1:
+                return None
+
+            if self.check_remote_ovsdb(target_ipaddr) is 1:
+                self.config_remote_ovsdb(target_ipaddr)
+                return None
+
+        except AttributeError, exc:
+            self.logger.error(exc.message)
+            return None
+
+        if isinstance(brlist, basestring):
+            brlist = [brlist]
+        elif not isinstance(brlist, list):
+            return TypeError
+
+        for bridge in brlist:
+            self._bridge.create_bridge(target_ipaddr, bridge)
+
+    def configure_ovs_ports(self, ovs_config):
         try:
             # Split box and bridge
             end1_ipaddr = ovs_config['end1_ipaddr']
@@ -76,8 +112,8 @@ class L2BridgeController:
         self._bridge.create_bridge(end1_ipaddr, end1_bridge)
         self._bridge.create_bridge(end2_ipaddr, end2_bridge)
 
-        self._bridge.update_bridge_controller(end1_ipaddr, end1_bridge, "10.246.67.127")
-        self._bridge.update_bridge_controller(end2_ipaddr, end2_bridge, "10.246.67.127")
+        self._bridge.update_bridge_controller(end1_ipaddr, end1_bridge, end1_ipaddr)
+        self._bridge.update_bridge_controller(end2_ipaddr, end2_bridge, end2_ipaddr)
 
         # Create Patch Port Pair
         if ovs_config['type'] == "patch":
