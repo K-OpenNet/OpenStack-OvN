@@ -4,3 +4,16 @@
     - br-test1
     - br-test2
     - br-test3
+
+- type: patch
+  end1: ovs-test.br-test1
+  end2: ovs-test.br-test2
+
+- type: patch
+  end1: ovs-test.br-test2
+  end2: ovs-test.br-test3
+
+- type: flow
+  target: ovs-test.br-test2
+  end1: ovs-test.br-test1
+  end2: ovs-test.br-test3

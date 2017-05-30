@@ -9,19 +9,14 @@ class OvN:
         self._setting = None
         self._net_template = None
         self._box_config = None
+        self._sdn_controller = None
         self.logger = None
-        self._util = None
+        self._util = util.Utils()
 
         self._bridge_control = None
         self._flow_control = None
 
-        self.initialize_controller()
         self.initialize_logger()
-
-    def initialize_controller(self):
-        self._bridge_control = layer2_bridge.L2BridgeController()
-        self._flow_control = layer2_flow.L2FlowController()
-        self._util = util.Utils()
 
     def initialize_logger(self):
         self.logger = logging.getLogger(__name__)
@@ -54,46 +49,60 @@ class OvN:
             self.logger.error(exc.message)
             exit(1)
 
+        self._sdn_controller = self._setting['sdn_controller']
+
+        self.prepare_controllers()
         self.provision()
 
+    def prepare_controllers(self):
+        self._bridge_control = layer2_bridge.L2BridgeController()
+        self._flow_control = layer2_flow.L2FlowController(self._sdn_controller)
+
     def provision(self):
+        # Parsing Template to Graph (Need to Add)
+
         for net in self._net_template:
             if net['type'] in ['bridge']:
+                self.logger.debug("Provision() - Configure OVS Bridges, config: " + net.__str__())
                 ovs_config = net
 
+                # Fill Box specific information (Controllers can't access to box information)
                 box_config = self.get_box_config(ovs_config['target'])
                 if not box_config:
                     self.logger.warn("provision(), there is no box with the name " + ovs_config['target'])
                     continue
                 ovs_config['target_ipaddr'] = box_config['ipaddr']
-                self._bridge_control.config_l2bridge(ovs_config)
-
-            elif net['type'] in ['patch', 'vxlan']:
-                # Parsing Template via controller
-                ovs_config = self._bridge_control.parse_ovs_port(net)
-
-                # Fill Box specific information (Controllers can't access to box information)
-                box1_config = self.get_box_config(ovs_config['end1_name'])
-                box2_config = self.get_box_config(ovs_config['end2_name'])
-                if not box1_config or not box2_config:
-                    continue
-                ovs_config['end1_ipaddr'] = box1_config['ipaddr']
-                ovs_config['end2_ipaddr'] = box2_config['ipaddr']
+                ovs_config['sdn_control_ipaddr'] = self._sdn_controller['ipaddr']
 
                 # Trigger configuration
                 self._bridge_control.config_l2bridge(ovs_config)
 
-            elif net['type'] is "flow":
-                self.logger.debug("Provision() - Configure L2 Flow for OVS, config: "
-                                  + net.__str__())
-                self.logger.debug("Not yet implemented")
-
+            elif net['type'] in ['patch', 'vxlan']:
+                self.logger.debug("Provision() - Configure OVS Ports, config: " + net.__str__())
                 # Parsing Template via controller
-                flow_config = self._flow_control.parse_flow_config(net)
+                ovs_config = self._bridge_control.parse_template(net)
 
                 # Fill Box specific information (Controllers can't access to box information)
-                flow_config['end1_ipaddr'] = box1_config['ipaddr']
-                flow_config['end2_ipaddr'] = box2_config['ipaddr']
+                box1_config = self.get_box_config(ovs_config['end1_box'])
+                box2_config = self.get_box_config(ovs_config['end2_box'])
+                if not box1_config or not box2_config:
+                    self.logger.warn("provision(), there is no box with the name " + ovs_config['target'])
+                    continue
+                ovs_config['end1_ipaddr'] = box1_config['ipaddr']
+                ovs_config['end2_ipaddr'] = box2_config['ipaddr']
+                ovs_config['sdn_control_ipaddr'] = self._sdn_controller['ipaddr']
+
+                # Trigger configuration
+                self._bridge_control.config_l2bridge(ovs_config)
+
+            elif net['type'] == "flow":
+                self.logger.info("Provision() - Configure L2 Flow for OVS, config: " + net.__str__())
+                # Parsing Template via controller
+                flow_config = self._flow_control.parse_template(net)
+
+                # Fill Box specific information (Controllers can't access to box information)
+                target_box_config = self.get_box_config(flow_config['target_box'])
+                flow_config['target_ipaddr'] = target_box_config['ipaddr']
 
                 # Trigger configuration
                 self._flow_control.config_l2flow(flow_config)

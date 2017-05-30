@@ -19,11 +19,7 @@ class L2BridgeController:
         ch.setFormatter(fm)
         self.logger.addHandler(ch)
 
-    def parse_ovs_bridge(self, ovs_config):
-        # In current situation, there no parts which is needed to be parsed
-        pass
-
-    def parse_ovs_port(self, ovs_config):
+    def parse_template(self, ovs_config):
         self.logger.debug("Parse Networking Template for OVS, config: " + ovs_config.__str__())
 
         try:
@@ -31,10 +27,10 @@ class L2BridgeController:
             end1 = ovs_config['end1'].split('.')
             end2 = ovs_config['end2'].split('.')
 
-            ovs_config['end1_name'] = end1[0]
+            ovs_config['end1_box'] = end1[0]
             ovs_config['end1_bridge'] = end1[1]
 
-            ovs_config['end2_name'] = end2[0]
+            ovs_config['end2_box'] = end2[0]
             ovs_config['end2_bridge'] = end2[1]
 
             return ovs_config
@@ -48,61 +44,49 @@ class L2BridgeController:
 
         # Need to add codes to check valid OVS configuration format
         self.check_ovs_format(ovs_config)
+        self.check_connectivity(ovs_config)
 
         if ovs_config['type'] == "bridge":
             self.configure_ovs_bridges(ovs_config)
+
         elif ovs_config['type'] in ['vxlan','patch']:
             self.configure_ovs_ports(ovs_config)
 
     def configure_ovs_bridges(self, ovs_config):
-        try:
-            # Split box and bridge
-            target_ipaddr = ovs_config['target_ipaddr']
+        if isinstance(ovs_config['bridge'], basestring):
+            brlist = [ovs_config['bridge']]
+        elif isinstance(ovs_config['bridge'], list):
             brlist = ovs_config['bridge']
-
-            # Check Box connectivity
-            if self._util.check_box_connect(target_ipaddr) is 1:
-                return None
-
-            if self.check_remote_ovsdb(target_ipaddr) is 1:
-                self.config_remote_ovsdb(target_ipaddr)
-                return None
-
-        except AttributeError, exc:
-            self.logger.error(exc.message)
-            return None
-
-        if isinstance(brlist, basestring):
-            brlist = [brlist]
-        elif not isinstance(brlist, list):
+        else:
             return TypeError
 
         for bridge in brlist:
-            self._bridge.create_bridge(target_ipaddr, bridge)
+            self._bridge.create_bridge(ovs_config['target_ipaddr'], bridge)
+            self._bridge.update_bridge_controller(ovs_config['target_ipaddr'], bridge, ovs_config['sdn_control_ipaddr'])
 
     def configure_ovs_ports(self, ovs_config):
         try:
             # Split box and bridge
+            tmp = dict()
             end1_ipaddr = ovs_config['end1_ipaddr']
-            end1_name = ovs_config['end1_name']
+            end1_box = ovs_config['end1_box']
             end1_bridge = ovs_config['end1_bridge']
+            end1_sdn = ovs_config['sdn_control_ipaddr']
+
+            tmp['target_ipaddr'] = end1_ipaddr
+            tmp['bridge'] = end1_bridge
+            tmp['sdn_control_ipaddr'] = end1_sdn
+            self.configure_ovs_bridges(tmp)
 
             end2_ipaddr = ovs_config['end2_ipaddr']
-            end2_name = ovs_config['end2_name']
+            end2_box = ovs_config['end2_box']
             end2_bridge = ovs_config['end2_bridge']
+            end2_sdn = ovs_config['sdn_control_ipaddr']
 
-            # Check Box connectivity
-            if self._util.check_box_connect(end1_ipaddr) is 1 \
-                    or self._util.check_box_connect(end2_ipaddr) is 1:
-                return None
-
-            if self.check_remote_ovsdb(end1_ipaddr) is 1:
-                self.config_remote_ovsdb(end1_ipaddr)
-                return None
-
-            if self.check_remote_ovsdb(end2_ipaddr) is 1:
-                self.config_remote_ovsdb(end2_ipaddr)
-                return None
+            tmp['target_ipaddr'] = end1_ipaddr
+            tmp['bridge'] = end1_bridge
+            tmp['sdn_control_ipaddr'] = end2_sdn
+            self.configure_ovs_bridges(tmp)
 
         except AttributeError, exc:
             self.logger.error(exc.message)
@@ -112,8 +96,8 @@ class L2BridgeController:
         self._bridge.create_bridge(end1_ipaddr, end1_bridge)
         self._bridge.create_bridge(end2_ipaddr, end2_bridge)
 
-        self._bridge.update_bridge_controller(end1_ipaddr, end1_bridge, end1_ipaddr)
-        self._bridge.update_bridge_controller(end2_ipaddr, end2_bridge, end2_ipaddr)
+        self._bridge.update_bridge_controller(end1_ipaddr, end1_bridge, end1_sdn)
+        self._bridge.update_bridge_controller(end2_ipaddr, end2_bridge, end2_sdn)
 
         # Create Patch Port Pair
         if ovs_config['type'] == "patch":
@@ -130,8 +114,8 @@ class L2BridgeController:
 
         # Create VxLAN Port Pair
         elif ovs_config['type'] == "vxlan":
-            box1_port = end1_name + "_to_" + end2_name
-            box2_port = end2_name + "_to_" + end1_name
+            box1_port = end1_box + "_to_" + end2_box
+            box2_port = end2_box + "_to_" + end1_box
             end1_vtep = ovs_config['end1_vtep']
             end2_vtep = ovs_config['end2_vtep']
 
@@ -145,19 +129,28 @@ class L2BridgeController:
             self._bridge.update_port_option(end2_ipaddr, box2_port, "key", 33333)
             self._bridge.update_port_option(end2_ipaddr, box2_port, "remote_ip", end2_vtep)
 
-    def check_remote_ovsdb(self, __remote_ip):
-        remote_port = "6640"
-        command = ["ovs-vsctl",
-                   "--db=tcp:"+__remote_ip+":"+remote_port,
-                   "show"]
-        (returncode, cmdout, cmderr) = self._util.shell_command(command)
+    def check_connectivity(self, ovs_config):
+        ipaddr_list = list()
+        if ovs_config['type'] == ["bridge"]:
+            ipaddr_list.append(ovs_config['target_ipaddr'])
+        elif ovs_config['type'] in ["vxlan", "patch"]:
+            ipaddr_list.append(ovs_config['end1_ipaddr'])
+            ipaddr_list.append(ovs_config['end2_ipaddr'])
 
-        if returncode is 0:
-            self.logger.info("OVSDB is connectable: " + __remote_ip)
-        elif returncode is 1:
-            self.logger.warn("OVSDB is not connectable: " + __remote_ip)
+        for ipaddr in ipaddr_list:
+            returncode = self._util.check_box_connect(ipaddr)
+            if returncode is 0:
+                self.logger.info("Box is reachable: " + ipaddr)
+            elif returncode is 1:
+                self.logger.warn("Box is not reachable: " + ipaddr)
+                return
 
-        return returncode, cmdout, cmderr
+            (returncode, cmdout, cmderr) = self._bridge.read_ovs_config(ipaddr)
+            if returncode is 0:
+                self.logger.info("OVSDB is connectable: " + ipaddr)
+            elif returncode is 1:
+                self.logger.warn("OVSDB is not connectable: " + ipaddr)
+                return
 
     def config_remote_ovsdb(self, __box):
         # Need to implement

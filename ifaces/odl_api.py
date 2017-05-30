@@ -26,7 +26,7 @@ class ODL_API:
 
     def delete_flow(self, host_ip, bridge, table_id, inport, outport):
         node_id = self._get_node_id(host_ip, bridge)
-        flow_id = self._get_flow_id(node_id, table_id, inport, outport)
+        flow_id = self.get_flow_id(node_id, table_id, inport, outport)
 
         url = self._default_url + '/restconf/config/opendaylight-inventory:nodes/node/'+node_id+'/table/'+table_id+'/flow/'+flow_id
         self.delete(url)
@@ -97,12 +97,12 @@ class ODL_API:
 
         return inst
 
-    def _get_flow_id (self, node, table_id, inport, outport):
+    def get_flow_id (self, node, table_id, inport, outport):
         u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/node/'+node+'/table/'+table_id
         resp, content = self.get(u)
         pass
 
-    def _get_node_id (self, host_ip, bridge):
+    def get_node_id (self, host_ip, bridge):
         u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/'
         resp, content = self.get(u)
         print content
@@ -260,7 +260,7 @@ class ODL_API:
            </ethernet-destination>
            <ethernet-source>
                <address>00:00:00:11:23:AE</address>
-           </ethernet-source>
+           </ethernet-source>sdn_controller:
        </ethernet-match>
      <in-port>1</in-port>
    </match>
