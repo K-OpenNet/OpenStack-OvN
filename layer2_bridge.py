@@ -29,20 +29,20 @@ class L2BridgeController:
             self.logger.error(exc.message)
             return None
 
-    def config_l2bridge(self, ovs_config):
-        self.logger.debug("Configure OVS, config: " + ovs_config.__str__())
+    def config_l2bridge(self, br_config):
+        self.logger.debug("Configure OVS, config: " + br_config.__str__())
 
         # Need to add codes to check valid OVS configuration format
-        self.check_ovs_format(ovs_config)
-        self.check_connectivity(ovs_config)
+        self.check_template_format(br_config)
+        self.check_connectivity(br_config)
 
-        if ovs_config['type'] == "bridge":
-            self.configure_ovs_bridges(ovs_config)
+        if br_config['type'] == "bridge":
+            self._configure_ovs_bridges(br_config)
 
-        elif ovs_config['type'] in ['vxlan','patch']:
-            self.configure_ovs_ports(ovs_config)
+        elif br_config['type'] in ['vxlan', 'patch']:
+            self._configure_ovs_ports(br_config)
 
-    def configure_ovs_bridges(self, ovs_config):
+    def _configure_ovs_bridges(self, ovs_config):
         if isinstance(ovs_config['bridge'], basestring):
             brlist = [ovs_config['bridge']]
         elif isinstance(ovs_config['bridge'], list):
@@ -54,7 +54,7 @@ class L2BridgeController:
             self._bridge.create_bridge(ovs_config['target_ipaddr'], bridge)
             self._bridge.update_bridge_controller(ovs_config['target_ipaddr'], bridge, ovs_config['sdn_control_ipaddr'])
 
-    def configure_ovs_ports(self, ovs_config):
+    def _configure_ovs_ports(self, ovs_config):
         try:
             # Split box and bridge
             tmp = dict()
@@ -66,7 +66,7 @@ class L2BridgeController:
             tmp['target_ipaddr'] = end1_ipaddr
             tmp['bridge'] = end1_bridge
             tmp['sdn_control_ipaddr'] = end1_sdn
-            self.configure_ovs_bridges(tmp)
+            self._configure_ovs_bridges(tmp)
 
             end2_ipaddr = ovs_config['end2_ipaddr']
             end2_box = ovs_config['end2_box']
@@ -76,7 +76,7 @@ class L2BridgeController:
             tmp['target_ipaddr'] = end1_ipaddr
             tmp['bridge'] = end1_bridge
             tmp['sdn_control_ipaddr'] = end2_sdn
-            self.configure_ovs_bridges(tmp)
+            self._configure_ovs_bridges(tmp)
 
         except AttributeError, exc:
             self.logger.error(exc.message)
@@ -146,7 +146,7 @@ class L2BridgeController:
         # Need to implement
         pass
 
-    def check_ovs_format(self, __ovs):
+    def check_template_format(self, __ovs):
         # Need to implement
         pass
 

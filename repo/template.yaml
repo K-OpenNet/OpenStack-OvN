@@ -15,5 +15,5 @@
 
 - type: flow
   target: ovs-test.br-test2
-  end1: ovs-test.br-test1
-  end2: ovs-test.br-test3
+  end1: ovs-test.br-test3
+  end2: ovs-test.br-test1
