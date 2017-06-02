@@ -19,7 +19,15 @@ class OvN:
         self.initialize_logger()
 
     def initialize_logger(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("ovn")
+        self.logger.setLevel(logging.DEBUG)
+
+        fm = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s() - %(message)s')
+        sh = logging.StreamHandler()
+        sh.setFormatter(fm)
+        self.logger.addHandler(sh)
+
+        """
         if len(self.logger.handlers):
             self.logger.setLevel(logging.DEBUG)
             fm = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
@@ -27,6 +35,7 @@ class OvN:
             ch.setLevel(logging.DEBUG)
             ch.setFormatter(fm)
             self.logger.addHandler(ch)
+        """
 
     def start(self):
         # Load OvN Setting File

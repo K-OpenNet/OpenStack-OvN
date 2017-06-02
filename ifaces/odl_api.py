@@ -1,5 +1,6 @@
 import json
 import httplib2
+import logging
 import xml_to_dict as xmlparser
 from xml.etree import cElementTree
 
@@ -9,29 +10,35 @@ class ODL_API:
         self._default_url = "http://" + odl_ip + ":8181"
         self._http_agent = httplib2.Http(".cache")
         self._http_agent.add_credentials(odl_id, odl_pw)
+        self.logger = logging.getLogger("ovn.control.l2flow.odl_api")
 
     def create_flow(self, host_ip, bridge, table_id, inport, outport):
-        node_id = self._get_node_id(host_ip, bridge)
-        print node_id
+        node_id = self.get_bridge_id(host_ip, bridge)
 
         # Find unassigned Flow ID
         flow_id = "10"
+        self.logger.debug("host_ip: " + host_ip + " bridge_id: " + node_id + " table_id: " + table_id + " inport: " + inport + " outport: " + outport)
 
         # Make json variable
-        flow = self.make_flow_dict(table_id, flow_id, inport, outport)
+        flow = self._make_flow_dict(table_id, flow_id, inport, outport)
         flow_str = json.dumps(flow)
+        self.logger.debug("HTTP Body for Flow Creation: " + flow_str)
+
         url = self._default_url + "/restconf/config/opendaylight-inventory:nodes/node/"+node_id+"/table/"+table_id+"/flow/"+flow_id
 
+        self.logger.debug("HTTP URL for Flow Creation: " + url)
         resp, content = self.put(url, flow_str)
+        self.logger.debug("Flow Creation Response: " + str(resp))
+        return content
 
     def delete_flow(self, host_ip, bridge, table_id, inport, outport):
-        node_id = self._get_node_id(host_ip, bridge)
+        node_id = self.get_bridge_id(host_ip, bridge)
         flow_id = self.get_flow_id(node_id, table_id, inport, outport)
 
         url = self._default_url + '/restconf/config/opendaylight-inventory:nodes/node/'+node_id+'/table/'+table_id+'/flow/'+flow_id
         self.delete(url)
 
-    def make_flow_dict(self, table_id, flow_id, inport, outports):
+    def _make_flow_dict(self, table_id, flow_id, inport, outports):
         #flow_name = "t"+table_id+"f"+flow_id+"_"+inport+"to"+outports.__str__()
         flow_name ="abc"
         flow = dict()
@@ -71,7 +78,6 @@ class ODL_API:
         ## Tunnel ID Match
         match["tunnel"] = {"tunnel-id": "100"}
         """
-
         ## Input Port
         match["in-port"] = inport
 
@@ -100,21 +106,39 @@ class ODL_API:
     def get_flow_id (self, node, table_id, inport, outport):
         u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/node/'+node+'/table/'+table_id
         resp, content = self.get(u)
+
         pass
 
-    def get_node_id (self, host_ip, bridge):
+    def get_port_number(self, host_ip, port):
+        p = self._get_node_connector(host_ip, port)
+        if p:
+            tmp = p['id'].split(":")
+            return tmp[2]
+
+    def get_bridge_id (self, host_ip, bridge):
+        b = self._get_node_connector(host_ip, bridge)
+        if b:
+            return b['id'].rstrip(":LOCAL")
+
+    def _get_node_connector(self, host_ip, connector):
+        node_list = self._get_nodes(host_ip)
+        for n in node_list:
+            con_list = n[u"node-connector"]
+            for c in con_list:
+                if connector == c[u"flow-node-inventory:name"]:
+                    return c
+
+    def _get_nodes(self, host_ip):
         u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/'
         resp, content = self.get(u)
         print content
         nodes = json.loads(content)
         node_list = nodes['nodes']['node']
+        res = list()
         for node in node_list:
             if host_ip == node[u"flow-node-inventory:ip-address"]:
-                con = node[u"node-connector"]
-                for e in con:
-                    if bridge == e[u"flow-node-inventory:name"]:
-                        return node['id']
-        return None
+                res.append(node)
+        return res
 
     def get(self, url):
         if self._http_agent is None:
@@ -280,5 +304,4 @@ if __name__ == "__main__":
     odl_ip = "10.246.67.127"
 
     odl_api = ODL_API(odl_id, odl_pw, odl_ip)
-    #odl_api.put_test2()
     odl_api.create_flow("10.246.67.241", "br-test3", "10", "100", [200])

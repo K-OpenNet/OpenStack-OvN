@@ -7,18 +7,7 @@ import json
 
 class Utils:
     def __init__(self):
-        self.logger = None
-        self.initialize_logger()
-
-    def initialize_logger(self):
-        self.logger = logging.getLogger(__name__)
-        if not len(self.logger.handlers):
-            self.logger.setLevel(logging.DEBUG)
-            fm = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.DEBUG)
-            ch.setFormatter(fm)
-            self.logger.addHandler(ch)
+        self.logger = logging.getLogger("ovn.util")
 
     def yaml_parser(self, __file):
         """ Parse the data from YAML template. """

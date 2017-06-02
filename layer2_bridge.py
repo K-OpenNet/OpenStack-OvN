@@ -5,19 +5,9 @@ import ifaces.ovsdb_api as ovsdb
 
 class L2BridgeController:
     def __init__(self):
-        self.logger = None
-        self.initialize_logger()
+        self.logger = logging.getLogger("ovn.control.l2bridge")
         self._bridge = ovsdb.OVSDB_API()
         self._util = util.Utils()
-
-    def initialize_logger(self):
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
-        fm = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        ch.setFormatter(fm)
-        self.logger.addHandler(ch)
 
     def parse_template(self, ovs_config):
         self.logger.debug("Parse Networking Template for OVS, config: " + ovs_config.__str__())
