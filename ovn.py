@@ -1,7 +1,8 @@
 import logging
+
 import layer2_bridge
 import layer2_flow
-import util
+from utils import util
 
 
 class OvN:
@@ -13,6 +14,9 @@ class OvN:
         self.logger = None
         self._util = util.Utils()
 
+        self._bridge_graphs = dict()
+        self._interconnect_list = list()
+
         self._bridge_control = None
         self._flow_control = None
 
@@ -21,39 +25,28 @@ class OvN:
     def initialize_logger(self):
         self.logger = logging.getLogger("ovn")
         self.logger.setLevel(logging.DEBUG)
-
         fm = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s() - %(message)s')
         sh = logging.StreamHandler()
         sh.setFormatter(fm)
         self.logger.addHandler(sh)
 
-        """
-        if len(self.logger.handlers):
-            self.logger.setLevel(logging.DEBUG)
-            fm = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.DEBUG)
-            ch.setFormatter(fm)
-            self.logger.addHandler(ch)
-        """
-
     def start(self):
         # Load OvN Setting File
-        self._setting = self._util.yaml_parser("setting.yaml")
+        self._setting = self._util.parse_yaml_file("setting.yaml")
 
         if not self._setting:
             exit(1)
 
         # Load Networking Template File
         try:
-            self._net_template = self._util.yaml_parser(self._setting['networking_template_file'])
+            self._net_template = self._util.parse_yaml_file(self._setting['networking_template_file'])
         except AttributeError, exc:
             self.logger.error(exc.message)
             exit(1)
 
         # Load Box Configuration File
         try:
-            self._box_config = self._util.yaml_parser(self._setting['box_config_file'])
+            self._box_config = self._util.parse_yaml_file(self._setting['box_config_file'])
         except AttributeError, exc:
             self.logger.error(exc.message)
             exit(1)
@@ -61,15 +54,26 @@ class OvN:
         self._sdn_controller = self._setting['sdn_controller']
 
         self.prepare_controllers()
+        self.get_current_configuration()
         self.provision()
 
     def prepare_controllers(self):
         self._bridge_control = layer2_bridge.L2BridgeController()
         self._flow_control = layer2_flow.L2FlowController(self._sdn_controller)
 
+    def get_current_configuration(self):
+        for box in self._box_config:
+            br_graph = self._bridge_control.get_bridge_graph(box["ipaddr"])
+            self._bridge_graphs[box["hostname"]] = br_graph
+        # Create site graph (VXLAN Tunnels)
+
+
+
+
+
+
     def provision(self):
         # Parsing Template to Graph (Need to Add)
-
         for net in self._net_template:
             if net['type'] in ['bridge']:
                 self.logger.debug("Provision() - Configure OVS Bridges, config: " + net.__str__())
@@ -119,7 +123,7 @@ class OvN:
     def get_box_config(self, hostname):
         for box in self._box_config:
             if box['hostname'] == hostname:
-                self.logger.debug("get_box(): \n" + box.__str__())
+                self.logger.debug("get_box(): " + box.__str__())
                 return box
 
         self.logger.error("In " + self._setting['box_config_file'] +

@@ -1,6 +1,8 @@
 import logging
-import util
+
 import ifaces.ovsdb_api as ovsdb
+from utils import util
+import networking_graph
 
 
 class L2BridgeController:
@@ -8,6 +10,37 @@ class L2BridgeController:
         self.logger = logging.getLogger("ovn.control.l2bridge")
         self._bridge = ovsdb.OVSDB_API()
         self._util = util.Utils()
+
+    def get_bridge_graph(self, box_ip):
+        # ovs-vsctl list-br
+        br_graph = networking_graph.BridgeGraph()
+
+        for bridge_name in self._bridge.read_bridge_list(box_ip):
+            br_vertex = br_graph.add_vertex(bridge_name)
+
+            port_list = self._bridge.read_port_list(box_ip, bridge_name)
+            for port_name in port_list:
+                brtype = self._bridge.read_ovsdb_table(box_ip, "interface", port_name, "type")
+
+                port_opt = dict()
+                port_opt["type"] = brtype
+                port_opt["peer"] = None
+
+                if brtype == "patch":
+                    bropt = self._bridge.read_ovsdb_table(box_ip, "interface", port_name, "options:peer")
+                    peer_port = bropt.strip("\"")
+                    peer_bridge = self._bridge.read_bridge_with_port(box_ip, peer_port)
+                    port_opt["peer"] = peer_bridge
+                    br_graph.add_edge(bridge_name, peer_bridge)
+
+                elif brtype == "vxlan":
+                    bropt = self._bridge.read_ovsdb_table(box_ip, "interface", port_name, "options:remote_ip")
+                    peer_ip = bropt.strip("\"")
+                    port_opt["peer"] = peer_ip
+
+                br_vertex.add_port(port_name, port_opt)
+                br_vertex.add_ext_port(port_name, port_opt)
+        return br_graph
 
     def parse_template(self, ovs_config):
         self.logger.debug("Parse Networking Template for OVS, config: " + ovs_config.__str__())
@@ -34,7 +67,7 @@ class L2BridgeController:
 
         # Need to add codes to check valid OVS configuration format
         self.check_template_format(br_config)
-        self.check_connectivity(br_config)
+        self._check_connectivity(br_config)
 
         if br_config['type'] == "bridge":
             self._configure_ovs_bridges(br_config)
@@ -119,7 +152,7 @@ class L2BridgeController:
             self._bridge.update_port_option(end2_ipaddr, box2_port, "key", 33333)
             self._bridge.update_port_option(end2_ipaddr, box2_port, "remote_ip", end2_vtep)
 
-    def check_connectivity(self, ovs_config):
+    def _check_connectivity(self, ovs_config):
         ipaddr_list = list()
         if ovs_config['type'] == ["bridge"]:
             ipaddr_list.append(ovs_config['target_ipaddr'])

@@ -1,9 +1,5 @@
 import logging
-import subprocess
-import shlex
 import ifaces.odl_api as odl
-from ifaces.odl_api import ODL_API
-
 
 class L2FlowController:
     def __init__(self, sdn_controller):
@@ -61,27 +57,3 @@ class L2FlowController:
         # Currently We use Table #1. When we add multi-tenant support, table_id has to be set according to a tenant.
         return self._flow_api.create_flow(flow_config['target_ipaddr'], flow_config['target_bridge'],
                                           "1", inport, outport)
-
-    def get_bridge_dpid(self, __box_ip, __bridge):
-        remote_port = "6640"
-        command = ["ovs-vsctl",
-                   "--db=tcp:" + __box_ip + ":" + remote_port,
-                   "get bridge", __bridge, "datapath-id"]
-        (returncode, cmdout, cmderr) = self.shell_command(command)
-
-        return "of:"+cmdout
-
-    def shell_command(self, __cmd):
-        self.logger.debug("Shell command: " + __cmd.__str__())
-        if isinstance(__cmd, basestring):
-            subproc = subprocess.Popen(shlex.split(__cmd),
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE,
-                                       shell=True)
-        elif isinstance(__cmd, dict):
-            subproc = subprocess.Popen(__cmd, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, shell=True)
-        (cmdout, cmderr) = subproc.communicate()
-        return subproc.returncode, cmdout, cmderr
-
-

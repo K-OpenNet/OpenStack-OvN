@@ -2,14 +2,14 @@ import logging
 import yaml
 import subprocess
 import shlex
-import json
+import simplejson as json
 
 
 class Utils:
     def __init__(self):
         self.logger = logging.getLogger("ovn.util")
 
-    def yaml_parser(self, __file):
+    def parse_yaml_file(self, __file):
         """ Parse the data from YAML template. """
         with open(__file, 'r') as stream:
             try:
@@ -23,6 +23,14 @@ class Utils:
                                        + " (Position: line %s, column %s)" %
                                        (mark.line + 1, mark.column + 1)))
                     return None
+
+    def parse_json_str(self, str):
+        try:
+            return json.loads(str)
+        except json.JSONDecodeError, exc:
+            self.logger.error(("JSON Format Error: " + str
+                                       + " (Position: line %s, column %s)" %
+                                       (exc.lineno + 1, exc.colno + 1)))
 
     def check_box_connect(self, __remote_ip):
         command = ["ping", "-c 1", "-W 1", __remote_ip]

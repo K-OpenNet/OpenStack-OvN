@@ -1,6 +1,7 @@
 import json
 import httplib2
 import logging
+import time
 import xml_to_dict as xmlparser
 from xml.etree import cElementTree
 
@@ -13,29 +14,58 @@ class ODL_API:
         self.logger = logging.getLogger("ovn.control.l2flow.odl_api")
 
     def create_flow(self, host_ip, bridge, table_id, inport, outport):
-        node_id = self.get_bridge_id(host_ip, bridge)
+        bridge_id = self._get_bridge_id(host_ip, bridge)
 
-        # Find unassigned Flow ID
-        flow_id = "11"
+        # Find a flow which has same match rule
+        flow_id = self._get_flow_id(bridge_id, table_id, inport, None)
+
+        # Find unassigned flow_id
+        if not flow_id:
+            u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/node/' + bridge_id + '/table/' + table_id
+            resp, content = self.get(u)
+            try:
+                flow_content = json.loads(content)
+                flows = flow_content["flow-node-inventory:table"][0]
+            except KeyError:
+                return None
+
+            flows = flows.get('flow')
+            if flows:
+                klist = list()
+                for f in flows:
+                    klist.append(f['id'])
+                klist.sort()
+                flow_id = str(int(klist[-1]) + 1)
+            else:
+                flow_id = "10"
+
         self.logger.debug("Create Flow. " +
-                          "host_ip: " + host_ip + " bridge_id: " + node_id + " table_id: " + table_id +
-                          " inport: " + inport + " outport: " + outport)
+                          "host_ip: " + host_ip + " bridge_id: " + bridge_id + " table_id: " + table_id +
+                          "flow_id: " + flow_id + " inport: " + inport + " outport: " + outport)
 
         # Make json variable
-        flow = self._make_flow_dict(table_id, flow_id, inport, outport)
-        flow_str = json.dumps(flow)
+        flow_dict = self._make_flow_dict(table_id, flow_id, inport, outport)
+        flow_str = json.dumps(flow_dict)
         self.logger.debug("HTTP Body: " + flow_str)
 
-        url = self._default_url + "/restconf/config/opendaylight-inventory:nodes/node/"+node_id+"/table/"+table_id+"/flow/"+flow_id
+        url = self._default_url + "/restconf/config/opendaylight-inventory:nodes/node/"+bridge_id+"/table/"+table_id+"/flow/"+flow_id
 
         self.logger.debug("HTTP URL: " + url)
-        resp, content = self.put(url, flow_str)
+        resp = self.put(url, flow_str)
         self.logger.debug("Flow Creation Response: " + str(resp))
-        return True
+
+        url = self._default_url + "/restconf/operational/opendaylight-inventory:nodes/node/"+bridge_id+"/table/"+table_id+"/flow/"+flow_id
+        for i in range(1, 6):
+            resp, content = self.get(url)
+            self.logger.debug("Flow Creation Response: " + str(resp))
+            if resp.status in ["200", "201"]:
+                return True
+            time.sleep(0.5)
+        return False
 
     def delete_flow(self, host_ip, bridge, table_id, inport, outport):
-        bridge_id = self.get_bridge_id(host_ip, bridge)
-        flow_id = self.get_flow_id(bridge_id, table_id, inport, outport)
+        bridge_id = self._get_bridge_id(host_ip, bridge)
+        flow_id = self._get_flow_id(bridge_id, table_id, inport, outport)
 
         if bridge_id and flow_id:
             url = self._default_url + \
@@ -118,9 +148,10 @@ class ODL_API:
 
         return inst
 
-    def get_flow_id(self, node, table_id, inport, outport):
-        u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/node/'+node+'/table/'+table_id
+    def _get_flow_id(self, node_id, table_id, inport, outport):
+        u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/node/' + node_id + '/table/' + table_id
         resp, content = self.get(u)
+
         try:
             flow_content = json.loads(content)
             flows = flow_content["flow-node-inventory:table"][0]["flow"]
@@ -128,19 +159,23 @@ class ODL_API:
             return None
 
         for flow in flows:
-            # Make variable for "Flow Match Rule"
-            cur_match = flow["match"]
-            new_match = dict()
-            new_match["in-port"] = inport
+            check = False
+            if inport:
+                # Make variable for "Flow Match Rule"
+                flow_match = flow["match"]
+                given_match = dict()
+                given_match["in-port"] = inport
+                check = self._is_same_match(flow_match, given_match)
 
-            # Make a variable for "Flow Instructions"
-            cur_inst = flow["instructions"]["instruction"]
-            new_inst = dict()
-            new_inst["out-port"] = outport
+            if check and outport:
+                # Make a variable for "Flow Instructions"
+                flow_inst = flow["instructions"]["instruction"]
+                given_inst = dict()
+                given_inst["out-port"] = outport
+                check = self._is_same_instruction(flow_inst, given_inst)
 
-            return flow["id"] \
-                if self._is_same_match(cur_match, new_match) and self._is_same_instruction(cur_inst, new_inst) \
-                else None
+            if check == True:
+                return flow['id']
 
     def _is_same_match(self, flow_match, given_match):
         inport = given_match["in-port"]
@@ -167,7 +202,7 @@ class ODL_API:
             tmp = p['id'].split(":")
             return tmp[2]
 
-    def get_bridge_id (self, host_ip, bridge):
+    def _get_bridge_id (self, host_ip, bridge):
         b = self._get_node_connector(host_ip, bridge)
         if b:
             return b['id'].rstrip(":LOCAL")
@@ -214,25 +249,6 @@ class ODL_API:
         hdrs={'Content-Type': 'application/json', 'Accept': 'application/json'}
         resp, content = self._http_agent.request(uri=url, method='DELETE', headers=hdrs)
         return resp, content
-
-    # Test Methods
-    # Below methods ended with "_test" will be removed
-    def get_test(self):
-        # ['nodes']['node'][#]['id']
-        # ['nodes']['node'][#]['node-connector']['flow-node-inventory:name']
-
-        # Flow Lists
-        # u = 'http://10.246.67.127:8181/restconf/operational/opendaylight-inventory:nodes/node/<node_id>/table/<table #>/'
-        u = self._default_url + '/restconf/operational/opendaylight-inventory:nodes/'
-        resp, content = self.get(u)
-        nodes = json.loads(content)
-        node_list = nodes['nodes']['node']
-        for node in node_list:
-            if "10.246.67.241" == node[u"flow-node-inventory:ip-address"]:
-                for e in node[u"node-connector"]:
-                    if "br-test1" == e[u"flow-node-inventory:name"]:
-                        return node['id']
-        return None
 
     def put_test(self):
         h = httplib2.Http(".cache")
@@ -303,4 +319,4 @@ if __name__ == "__main__":
     odl_ip = "10.246.67.127"
 
     odl_api = ODL_API(odl_id, odl_pw, odl_ip)
-    odl_api.delete_flow("10.246.67.241", "br-test2", "2", "1", "2")
+    odl_api.delete_flow("10.246.67.241", "br-test2", "1", "2", "4")

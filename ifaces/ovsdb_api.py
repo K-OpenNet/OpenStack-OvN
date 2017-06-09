@@ -1,4 +1,5 @@
-import util
+from utils import util
+
 
 class OVSDB_API:
     def __init__(self):
@@ -15,6 +16,24 @@ class OVSDB_API:
         command = ["ovs-vsctl",
                    "--db=tcp:" + box_ip + ":6640",
                    "list-br"]
+        return self._util.shell_command(command)
+
+    def read_port_list(self, box_ip, bridge):
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + box_ip + ":6640",
+                   "list-ports", bridge]
+        return self._util.shell_command(command)
+
+    def read_ovsdb_table(self, box_ip, table, name, key):
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + box_ip + ":6640",
+                   "get", table, name, key]
+        return self._util.shell_command(command)
+
+    def read_bridge_with_port(self, box_ip, port):
+        command = ["ovs-vsctl",
+                   "--db=tcp:" + box_ip + ":6640",
+                   "list-to-br", port]
         return self._util.shell_command(command)
 
     # Create Functions
