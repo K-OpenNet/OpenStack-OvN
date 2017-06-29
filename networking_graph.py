@@ -39,3 +39,9 @@ class BridgeGraph(Graph):
         new_vertex = BridgeVertex(node)
         self.vert_dict[node] = new_vertex
         return new_vertex
+
+class BoxVertex(Vertex):
+    pass
+
+class BoxGraph(Graph):
+    pass
