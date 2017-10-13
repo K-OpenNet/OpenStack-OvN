@@ -32,7 +32,7 @@ class Utils:
                                        + " (Position: line %s, column %s)" %
                                        (exc.lineno + 1, exc.colno + 1)))
 
-    def check_box_connect(self, __remote_ip):
+    def check_ip_connectivity(self, __remote_ip):
         command = ["ping", "-c 1", "-W 1", __remote_ip]
         (returncode, cmdout, cmderr) = self.shell_command(command)
 
