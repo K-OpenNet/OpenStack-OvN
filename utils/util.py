@@ -16,7 +16,7 @@ class Utils:
                 file_str = stream.read()
                 self.logger.info("Parse YAML from the file: \n" + file_str)
                 return yaml.load(file_str)
-            except yaml.YAMLError, exc:
+            except yaml.YAMLError as exc:
                 if hasattr(exc, 'problem_mark'):
                     mark = exc.problem_mark
                     self.logger.error(("YAML Format Error: " + __file
@@ -27,7 +27,7 @@ class Utils:
     def parse_json_str(self, str):
         try:
             return json.loads(str)
-        except json.JSONDecodeError, exc:
+        except json.JSONDecodeError as exc:
             self.logger.error(("JSON Format Error: " + str
                                        + " (Position: line %s, column %s)" %
                                        (exc.lineno + 1, exc.colno + 1)))
@@ -46,7 +46,7 @@ class Utils:
     def shell_command(self, __cmd):
         self.logger.debug("Shell command: " + __cmd.__str__())
         subproc = None
-        if isinstance(__cmd, basestring):
+        if isinstance(__cmd, str):
             subproc = subprocess.Popen(shlex.split(__cmd),
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE)

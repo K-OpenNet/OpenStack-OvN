@@ -7,30 +7,14 @@ class L2FlowController:
         self._sdn = sdn_controller
         self._flow_api = odl.ODL_API(self._sdn['id'], self._sdn['pw'], self._sdn['ipaddr'])
 
-    def parse_template(self, flow_config):
-        # Need to parse host_ip, bridge, table_id, inport, outport
-        # host_ip <- filled by "ovn.py"
-        self.logger.debug("Parse Networking Template for OVS, config: " + flow_config.__str__())
-
-        try:
-            # Split box and bridge
-            tmp = flow_config['target'].split('.')
-            flow_config['target_box'] = tmp[0]
-            flow_config['target_bridge'] = tmp[1]
-
-            tmp = flow_config['end1'].split('.')
-            flow_config['end1_box'] = tmp[0]
-            flow_config['end1_bridge'] = tmp[1]
-
-            tmp = flow_config['end2'].split('.')
-            flow_config['end2_box'] = tmp[0]
-            flow_config['end2_bridge'] = tmp[1]
-
-        except AttributeError, exc:
-            self.logger.error(exc.message)
-            return None
-
-        return flow_config
+    def provision(self, fe):
+        # List all required procedure to configure L2 flows
+        # Check connectivity to SDN Controller
+        # Need to find "box_ip" "bridge" / "table_id" "inport" "outport"
+        # Get inport from port
+        # Get outport from port
+        # Create OpenFlow rule
+        pass
 
     def config_l2flow(self, flow_config):
         self.logger.debug("config_l2flow() configure OpenFlow rule using SDN Controller. Parsed Template: "

@@ -2,7 +2,7 @@ import json
 import httplib2
 import logging
 import time
-import xml_to_dict as xmlparser
+# import xml_to_dict as xmlparser
 from xml.etree import cElementTree
 
 
@@ -14,6 +14,16 @@ class ODL_API:
         self.logger = logging.getLogger("ovn.control.l2flow.odl_api")
 
     def create_flow(self, host_ip, bridge, table_id, inport, outport):
+        # Find Bridge ID
+        # Find existing Flow ID
+        # If the matched Flow is not exist, calculate Flow ID one bigger than the highest flow ID
+        # Get Flow list of Bridge ID & Table ID
+        # Get the highest flow Id
+        # Calculate new flow ID (BiggestID+1)
+        # Make dictionary according to ODL flow format
+        # Dump the dictionary into JSON string
+        # Send HTTP request to ODL
+
         bridge_id = self._get_bridge_id(host_ip, bridge)
 
         # Find a flow which has same match rule
@@ -250,68 +260,68 @@ class ODL_API:
         resp, content = self._http_agent.request(uri=url, method='DELETE', headers=hdrs)
         return resp, content
 
-    def put_test(self):
-        h = httplib2.Http(".cache")
-        h.add_credentials("admin", "admin")
-        u = 'http://10.246.67.127:8181/restconf/config/opendaylight-inventory:nodes/node/openflow:59420899366725/table/1/flow/10'
-
-        btemp = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<flow xmlns="urn:opendaylight:flow:inventory">
-   <strict>false</strict>
-   <instructions>
-       <instruction>
-           <order>0</order>
-           <apply-actions>
-              <action>
-                 <push-vlan-action>
-                     <ethernet-type>33024</ethernet-type>
-                 </push-vlan-action>
-                 <order>0</order>
-              </action>
-               <action>
-                   <set-field>
-                       <vlan-match>
-                            <vlan-id>
-                                <vlan-id>79</vlan-id>
-                                <vlan-id-present>true</vlan-id-present>
-                            </vlan-id>
-                       </vlan-match>
-                   </set-field>
-                   <order>1</order>
-               </action>
-               <action>
-                   <output-action>
-                       <output-node-connector>5</output-node-connector>
-                   </output-action>
-                   <order>2</order>
-               </action>
-           </apply-actions>
-       </instruction>
-   </instructions>
-   <table_id>0</table_id>
-   <id>31</id>
-   <match>
-       <ethernet-match>
-           <ethernet-type>
-               <type>2048</type>
-           </ethernet-type>
-           <ethernet-destination>
-               <address>FF:FF:29:01:19:61</address>
-           </ethernet-destination>
-           <ethernet-source>
-               <address>00:00:00:11:23:AE</address>
-           </ethernet-source>sdn_controller:
-       </ethernet-match>
-     <in-port>1</in-port>
-   </match>
-   <flow-name>vlan_flow</flow-name>
-   <priority>2</priority>
-</flow>
-        """
-
-        root = cElementTree.XML(btemp)
-        xmldict = xmlparser.etree_to_dict(root)
-        print json.dumps(xmldict)
+#     def put_test(self):
+#         h = httplib2.Http(".cache")
+#         h.add_credentials("admin", "admin")
+#         u = 'http://10.246.67.127:8181/restconf/config/opendaylight-inventory:nodes/node/openflow:59420899366725/table/1/flow/10'
+#
+#         btemp = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+# <flow xmlns="urn:opendaylight:flow:inventory">
+#    <strict>false</strict>
+#    <instructions>
+#        <instruction>
+#            <order>0</order>
+#            <apply-actions>
+#               <action>
+#                  <push-vlan-action>
+#                      <ethernet-type>33024</ethernet-type>
+#                  </push-vlan-action>
+#                  <order>0</order>
+#               </action>
+#                <action>
+#                    <set-field>
+#                        <vlan-match>
+#                             <vlan-id>
+#                                 <vlan-id>79</vlan-id>
+#                                 <vlan-id-present>true</vlan-id-present>
+#                             </vlan-id>
+#                        </vlan-match>
+#                    </set-field>
+#                    <order>1</order>
+#                </action>
+#                <action>
+#                    <output-action>
+#                        <output-node-connector>5</output-node-connector>
+#                    </output-action>
+#                    <order>2</order>
+#                </action>
+#            </apply-actions>
+#        </instruction>
+#    </instructions>
+#    <table_id>0</table_id>
+#    <id>31</id>
+#    <match>
+#        <ethernet-match>
+#            <ethernet-type>
+#                <type>2048</type>
+#            </ethernet-type>
+#            <ethernet-destination>
+#                <address>FF:FF:29:01:19:61</address>
+#            </ethernet-destination>
+#            <ethernet-source>
+#                <address>00:00:00:11:23:AE</address>
+#            </ethernet-source>sdn_controller:
+#        </ethernet-match>
+#      <in-port>1</in-port>
+#    </match>
+#    <flow-name>vlan_flow</flow-name>
+#    <priority>2</priority>
+# </flow>
+#         """
+#
+#         root = cElementTree.XML(btemp)
+#         xmldict = xmlparser.etree_to_dict(root)
+#         print (json.dumps(xmldict))
 
 if __name__ == "__main__":
     odl_id = "admin"
