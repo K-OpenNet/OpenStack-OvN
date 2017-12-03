@@ -4,34 +4,34 @@
 # opt: dict
 
 - type: bridge
-  target: ovs-test.br-test1
+  target: ovn-control1.br-test1
 
 - type: bridge
-  target: ovs-test.br-test2
+  target: ovn-control1.br-test2
 
 - type: bridge
-  target: ovs-test.br-test3
+  target: ovn-control1.br-test3
 
 - type: bridge
-  target: ovs-test2.br-test1
+  target: ovn-client1.br-test1
 
 - type: port
-  target: ovs-test.br-test1.test_port
+  target: ovn-control1.br-test1.test_port
 
 - type: patch
-  end1: ovs-test.br-test1
-  end2: ovs-test.br-test2
+  end1: ovn-control1.br-test1
+  end2: ovn-control1.br-test2
 
 - type: vxlan
-  end1: ovs-test.br-test1
-  end2: ovs-test2.br-test1
+  end1: ovn-control1.br-test1
+  end2: ovn-client1.br-test1
 
 - type: flow
-  target: ovs-test.br-test2
-  end1: ovs-test.br-test1
-  end2: ovs-test.br-test3
+  target: ovn-control1.br-test2
+  end1: ovn-control1.br-test1
+  end2: ovn-control1.br-test3
 
 - type: flow
-  target: ovs-test.br-test2
-  end1: ovs-test.br-test3
-  end2: ovs-test.br-test1
+  target: ovn-control1.br-test2
+  end1: ovn-control1.br-test3
+  end2: ovn-control1.br-test1

@@ -38,10 +38,8 @@ class BridgeGraph(Graph):
         self.num_vertices += 1
         new_vertex = BridgeVertex(node)
         self.vert_dict[node] = new_vertex
+        # add_port_to_vertex
         return new_vertex
 
-class BoxVertex(Vertex):
-    pass
-
-class BoxGraph(Graph):
-    pass
+    def _add_ports_to_vertex(self, pt, vtx):
+        pass

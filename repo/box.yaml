@@ -1,6 +1,5 @@
--
-  hostname: ovs-test
-  ipaddr: 10.246.67.241
-  linux_account:
-    id: test
-    password: test
+- hostname: ovn-control1
+  ipaddr: 192.168.124.101
+
+- hostname: ovn-client1
+  ipaddr: 192.168.124.111

@@ -1,5 +1,4 @@
 import logging
-
 import layer2_bridge
 import layer2_flow
 from utils import util
@@ -34,6 +33,7 @@ class OvN:
     def start(self):
         self.load_files()
         self.create_modules()
+        self.parse_networking_template()
         self.get_current_configuration()
         self.provision_with_modules()
 
@@ -47,13 +47,13 @@ class OvN:
             exit(1)
 
     def load_ovn_setting(self):
-        self._ovn_setting = self._util.parse_yaml_file("setting.yaml")
+        self._ovn_setting = self._util.read_yaml_file("setting.yaml")
 
     def load_network_template(self):
-        self._net_template = self._util.parse_yaml_file(self._ovn_setting['networking_template'])
+        self._net_template = self._util.read_yaml_file(self._ovn_setting['networking_template'])
 
     def load_boxes_setting(self):
-        self._boxes_info = self._util.parse_yaml_file(self._ovn_setting['box_information'])
+        self._boxes_info = self._util.read_yaml_file(self._ovn_setting['box_information'])
 
     def create_modules(self):
         self.create_bridge_module()
@@ -66,22 +66,19 @@ class OvN:
         self._flow_module = layer2_flow.L2FlowController(self._ovn_setting['sdn_controller'])
 
     def get_current_configuration(self):
-        for box in self._boxes_info:
-            br_graph = self._bridge_module.get_bridge_graph(box["ipaddr"])
-            self._bridge_graphs[box["hostname"]] = br_graph
-        # Create site graph (VXLAN Tunnels)
+        self._bridge_graphs = self._bridge_module.get_bridge_graph(self._boxes_info)
 
     def parse_networking_template(self):
         for elem in self._net_template:
-            self._make_networking_element(elem)
+            self._complete_networking_element(elem)
 
-    def _make_networking_element(self, elem):
+    def _complete_networking_element(self, elem):
         elem_keys = elem.keys()
         for k in elem_keys:
             if k == "type":
                 pass
             elif k in ["target", "end1", "end2"]:
-                elem[k] = self.get_elem_dict_from(elem[k])
+                elem[k] = self.get_end_dict_from(elem[k])
                 elem[k]["ipaddr"] = self.get_box_ipaddr(elem[k]["box"])
                 elem[k]["sdn_control_ipaddr"] = self.get_sdn_control_ipaddr()
             elif k == "opt":
@@ -108,22 +105,22 @@ class OvN:
         #self._flow_module.provision(fe)
 
     # Shared by Provisioning Methods
-    def get_elem_dict_from(self, e):
+    def get_end_dict_from(self, end_str):
         e_dict = dict()
-        l = e.split('.')
-        for i in l.__len__:
+        separated_list = end_str.split('.')
+        for i, val in enumerate(separated_list):
             if i == 0:
-                e_dict["box"] = l[i]
+                e_dict["box"] = val
             elif i == 1:
-                e_dict["bridge"] = l[i]
+                e_dict["bridge"] = val
             elif i == 2:
-                e_dict["port"] = l[i]
+                e_dict["port"] = val
             else:
                 pass
         return e_dict
 
     def get_sdn_control_ipaddr(self):
-        return self._sdn_controller['ipaddr']
+        return self._ovn_setting['sdn_controller']['ipaddr']
 
     def get_box_ipaddr(self, boxname):
         box_info = self.get_box_info(boxname)
@@ -134,9 +131,26 @@ class OvN:
             if box_info['hostname'] == boxname:
                 self.logger.debug("get_box(): " + box_info.__str__())
                 return box_info
-        self.logger.error("In " + self._ovn_setting['box_config_file'] +
-                          ", Box is not defined: " + boxname)
+        self.logger.error("In {}, Box is not defined: {}".format(self._ovn_setting['box_information'], boxname))
+
+    def clear(self):
+        if self._net_template is None:
+            self.load_files()
+            self.create_modules()
+            self.parse_networking_template()
+        self.unprovision()
+
+    def unprovision(self):
+        for e in self._net_template:
+            e_type = e["type"]
+            if e_type in ["bridge", "port", "vxlan", "patch"]:
+                self._bridge_module.unprovision(e)
+            elif e_type == "flow":
+                self.logger.debug("Will be implemented")
+            else:
+                raise TypeError("Type {} is not supported".format(e_type))
 
 if __name__ == "__main__":
     ovn = OvN()
     ovn.start()
+    #ovn.clear()

@@ -9,7 +9,7 @@ class Utils:
     def __init__(self):
         self.logger = logging.getLogger("ovn.util")
 
-    def parse_yaml_file(self, __file):
+    def read_yaml_file(self, __file):
         """ Parse the data from YAML template. """
         with open(__file, 'r') as stream:
             try:

@@ -13,7 +13,7 @@ class L2BridgeController:
 
     def provision(self, be):
         self.logger.debug("Configure OVS, config: " + be.__str__())
-        self._pre_check_before_provision()
+        self._pre_check_before_provision(be)
         self._do_provision(be)
 
     def _pre_check_before_provision(self, be):
@@ -26,71 +26,58 @@ class L2BridgeController:
             print(err.message)
 
     def check_template_format(self, elem):
-        # Need to be implemented
-        # bridge / port type check
-        # Check Common Error
-        # Check Type Specific Error
-        elem_keys = elem.keys()
-        if elem['type'] == "bridge:":
-            if "target" not in elem_keys:
-                raise ValueError("Bridge element have to contain \"target: box.bridge\"")
-            else:
-                target_keys = elem['target'].keys()
-                if "box" not in target_keys or "bridge" not in target_keys:
-                    raise ValueError("Bridge element have to contain \"target: box.bridge\"")
-            if "end1" in elem_keys or "end2" in elem_keys:
-                self.logger.warning("Bridge element doesn't require end1/end2. Those are ignored")
-
+        self.logger.debug("Check template format: {}".format(elem))
+        if elem['type'] == "bridge":
+            self._check_bridge_template_format(elem)
         elif elem['type'] == "port":
-            if "target" not in elem_keys:
-                raise ValueError("Normal port element have to contain \"target: box.bridge.port\"")
-            else:
-                target_keys = elem['target'].keys()
-                if "box" not in target_keys or "bridge" not in target_keys \
-                        or "port" not in target_keys:
-                    raise ValueError("Normal port element have to contain \"target: box.bridge.port\"")
-            if "end1" in elem_keys or "end2" in elem_keys:
-                self.logger.warning("Normal port element doesn't require end1/end2. Those are ignored")
-
+            self._check_normal_port_template_format(elem)
         elif elem['type'] == "vxlan":
-            # Field Check
-            # Two endpoints of vxlan port pair should be located in different hosts
-            if "end1" not in elem_keys or "end2" not in elem_keys:
-                raise ValueError("VXLAN port element have to contain \"end1: box.bridge\" / \"end2: box.bridge\"")
-            else:
-                end_keys = elem['end1'].keys()
-                if "box" not in end_keys or "bridge" not in end_keys:
-                    raise ValueError("VXLAN port element have to contain \"end1: box.bridge\"")
-                end_keys = elem['end2'].keys()
-                if "box" not in end_keys or "bridge" not in end_keys:
-                    raise ValueError("VXLAN port element have to contain \"end2: box.bridge\"")
-
-                if elem['end1']['box'] is elem['end2']['box']:
-                    raise ValueError("VXLAN port pair should be configured at different boxes")
-
-            if "target" in elem_keys:
-                self.logger.warning("VXLAN port element doesn't require contain target. Those are ignored")
-
+            self._check_vxlan_port_template_format(elem)
         elif elem['type'] == "patch":
-            if "end1" not in elem_keys or "end2" not in elem_keys:
-                raise ValueError("VXLAN port element have to contain \"end1: box.bridge\" / \"end2: box.bridge\"")
-            else:
-                end_keys = elem['end1'].keys()
-                if "box" not in end_keys or "bridge" not in end_keys:
-                    raise ValueError("Patch port element have to contain \"end1: box.bridge\"")
-                end_keys = elem['end2'].keys()
-                if "box" not in end_keys or "bridge" not in end_keys:
-                    raise ValueError("Patch port element have to contain \"end2: box.bridge\"")
-
-                if elem['end1']['box'] is not elem['end2']['box']:
-                    raise ValueError("Patch port pair have to be configured in same box")
-                elif elem['end1']['box'] is elem['end2']['box']:
-                    raise ValueError("Patch port pair have to be configured at two different bridges")
-
-            if "target" in elem_keys:
-                self.logger.warning("Patch port element doesn't require contain target. Those are ignored")
+            self._check_patch_port_template_format(elem)
         else:
             raise ValueError("Type " + elem['type'] + " is not supported")
+
+    def _check_bridge_template_format(self, elem):
+        self._check_exist_target_elem_in(elem.keys())
+        self._check_keys_in_list(["box", "bridge"], elem['target'].keys())
+        self._check_exist_not_required_keys(["end1", "end2"], elem.keys())
+
+    def _check_normal_port_template_format(self, elem):
+        self._check_exist_target_elem_in(elem.keys())
+        self._check_keys_in_list(["box", "bridge", "port"], elem['target'].keys())
+        self._check_exist_not_required_keys(["end1", "end2"], elem.keys())
+
+    def _check_vxlan_port_template_format(self, elem):
+        self._check_keys_in_list(["end1", "end2"], elem.keys())
+        self._check_keys_in_list(["box", "bridge"], elem['end1'].keys())
+        self._check_keys_in_list(["box", "bridge"], elem['end2'].keys())
+        if elem['end1']['box'] == elem['end2']['box']:
+            raise ValueError("VXLAN port pair should be configured at different boxes")
+        self._check_exist_not_required_keys(["target"], elem.keys())
+
+    def _check_patch_port_template_format(self, elem):
+        self._check_keys_in_list(["end1", "end2"], elem.keys())
+        self._check_keys_in_list(["box", "bridge"], elem['end1'].keys())
+        self._check_keys_in_list(["box", "bridge"], elem['end2'].keys())
+        if elem['end1']['box'] != elem['end2']['box']:
+            raise ValueError("Patch port pair have to be configured in same box")
+        elif elem['end1']['bridge'] == elem['end2']['bridge']:
+            raise ValueError("Patch port pair have to be configured at two different bridges")
+        self._check_exist_not_required_keys(["target"], elem.keys())
+
+    def _check_exist_target_elem_in(self, elem_keys):
+        self._check_keys_in_list(["target"], elem_keys)
+
+    def _check_keys_in_list(self, keys, key_list):
+        for k in keys:
+            if k not in key_list:
+                raise ValueError()
+
+    def _check_exist_not_required_keys(self, not_req_keys, elem_keys):
+        for k in not_req_keys:
+            if k in elem_keys:
+                self.logger.warn("Key " + k +" is not required!")
 
     def _check_connectivity(self, be):
         ipaddr_list = self._get_ipaddr_list(be)
@@ -113,12 +100,13 @@ class L2BridgeController:
             elif returncode is 1:
                 raise ValueError("IP address is not reachable: " + ipaddr)
 
-    def _check_ovsdb_connectivity(self, ipaddr):
-        (returncode, cmdout, cmderr) = self._bridge_interface.read_ovs_config(ipaddr)
-        if returncode is 0:
-            self.logger.info("OVSDB is reachable: " + ipaddr)
-        elif returncode is 1:
-            raise ValueError("OVSDB is not reachable: " + ipaddr)
+    def _check_ovsdb_connectivity(self, ipaddr_list):
+        for ipaddr in ipaddr_list:
+            (returncode, cmdout, cmderr) = self._bridge_interface.read_ovs_config(ipaddr)
+            if returncode is 0:
+                self.logger.info("OVSDB is reachable: " + ipaddr)
+            elif returncode is 1:
+                raise ValueError("OVSDB is not reachable: " + ipaddr)
 
     def _do_provision(self, elem):
         try:
@@ -131,7 +119,7 @@ class L2BridgeController:
             elif elem['type'] == "vxlan":
                 self._add_vxlan_port_pair(elem)
         except ValueError as e:
-            self.logger.error(e.args)
+            raise TypeError("Type " + elem['type'] + "is not supported by OvN")
             # finally:
             # I'll add codes to remove all bridges/ports configured from this execution
 
@@ -144,39 +132,40 @@ class L2BridgeController:
 
     def _add_normal_port(self, pe):
         # Validate the given element can be configurable
-        box_ip = self._get_box_ipaddr_from(pe['end1'])
-        bridge = self._get_bridge_from(pe['end1'])
-        pt_name = self._get_port_from(pe['end1'])
+        box_ip = self._get_box_ipaddr_from(pe['target'])
+        bridge = self._get_bridge_from(pe['target'])
+        pt_name = self._get_port_from(pe['target'])
         self._create_port(box_ip, bridge, pt_name)
-
-    def _add_vxlan_port_pair(self, pe):
-        self._add_vxlan_port(pe['end1'], pe['end2'])
-        self._add_vxlan_port(pe['end2'], pe['end1'])
-
-    def _add_vxlan_port(self, from_pt, to_pt, vxlan_opt=None):
-        pt_name = self._create_port_name("vxlan", from_pt, to_pt)
-        box_ip = self._get_box_ipaddr_from(from_pt)
-        bridge = self._get_bridge_from(from_pt['bridge'])
-        peer_ip = self._get_box_ipaddr_from(to_pt)
-
-        self._create_port(box_ip, bridge, pt_name)
-        self._bridge_interface.update_port_type(box_ip, pt_name, "vxlan")
-        self._bridge_interface.update_port_option(box_ip, pt_name, "key", 33333)
-        self._bridge_interface.update_port_option(box_ip, pt_name, "remote_ip", peer_ip)
 
     def _add_patch_port_pair(self, pe):
         self._add_patch_port(pe['end1'], pe['end2'])
         self._add_patch_port(pe['end2'], pe['end1'])
 
-    def _add_patch_port(self, from_pt, to_pt):
-        pt_name = self._create_port_name("patch", from_pt, to_pt)
-        peer_pt_name = self._create_port_name("patch", to_pt, from_pt)
-        box_ip = self._get_box_ipaddr_from(from_pt)
-        bridge = self._get_bridge_from(from_pt['bridge'])
+    def _add_patch_port(self, from_end, to_end):
+        pt_name = self._create_port_name("patch", from_end, to_end)
+        peer_pt_name = self._create_port_name("patch", to_end, from_end)
+        box_ip = self._get_box_ipaddr_from(from_end)
+        bridge = self._get_bridge_from(from_end)
 
         self._create_port(box_ip, bridge, pt_name)
         self._bridge_interface.update_port_type(box_ip, pt_name, "patch")
         self._bridge_interface.update_port_option(box_ip, pt_name, "peer", peer_pt_name)
+
+    def _add_vxlan_port_pair(self, pe):
+        self._add_vxlan_port(pe['end1'], pe['end2'])
+        self._add_vxlan_port(pe['end2'], pe['end1'])
+
+    def _add_vxlan_port(self, from_end, to_end, vxlan_opt=None):
+        pt_name = self._create_port_name("vxlan", from_end, to_end)
+        box_ip = self._get_box_ipaddr_from(from_end)
+        bridge = self._get_bridge_from(from_end)
+        peer_ip = self._get_box_ipaddr_from(to_end)
+
+        self._create_port(box_ip, bridge, pt_name)
+        self._bridge_interface.update_port_type(box_ip, pt_name, "vxlan")
+        self._bridge_interface.update_port_option(box_ip, pt_name, "key", str(33333))
+        self._bridge_interface.update_port_option(box_ip, pt_name, "remote_ip", peer_ip)
+
 
     def _create_port_name(self, type, from_end, to_end):
         port_name = str()
@@ -198,9 +187,37 @@ class L2BridgeController:
                              ". The bridge will be created")
             self._bridge_interface.create_bridge(box_ip, bridge)
 
-    def get_bridge_graph(self, box_ip):
+    def config_remote_ovsdb(self, _box):
+        # Need to implement
+        pass
+
+    def _get_box_ipaddr_from(self, end):
+        return end['ipaddr']
+
+    def _get_bridge_from(self, end):
+        return end['bridge']
+
+    def _get_port_from(self, end):
+        return end['port']
+
+    def _get_sdn_control_ipaddr(self, end):
+        return end['sdn_control_ipaddr']
+
+    def get_bridge_graph(self, box_info):
         # ovs-vsctl list-br
+        # Create bridge vertices
+        # Add ports in each bridge vertices
+        # Add edges between two ports
         br_graph = networking_graph.BridgeGraph()
+        for box in box_info:
+            self._get_brgraph_of_box(box['ipaddr'])
+
+    def _get_brgraph_of_box(self, box_ip):
+        br_graph = networking_graph.BridgeGraph()
+        br_in_box = self._bridge_interface.read_bridge_list(box_ip)
+        for br in br_in_box:
+
+            pass
 
         for bridge_name in self._bridge_interface.read_bridge_list(box_ip):
             br_vertex = br_graph.add_vertex(bridge_name)
@@ -229,22 +246,49 @@ class L2BridgeController:
                 br_vertex.add_ext_port(port_name, port_opt)
         return br_graph
 
-    def config_remote_ovsdb(self, __box):
-        # Need to implement
-        pass
+    def unprovision(self, e):
+        e_type = e['type']
+        if e_type == 'bridge':
+            self._delete_bridge(e)
+        elif e_type == 'port':
+            self._delete_normal_port(e)
+        elif e_type == 'vxlan':
+            self._delete_vxlan_port_pair(e)
+        elif e_type == 'patch':
+            self._delete_patch_port_pair(e)
+        else:
+            raise TypeError("Type "+ e_type + " is not supported by OvN")
 
-    def _get_box_ipaddr_from(self, element):
-        return element['ipaddr']
+    def _delete_bridge(self, be):
+        box_ipaddr = self._get_box_ipaddr_from(be['target'])
+        bridge_name = self._get_bridge_from(be['target'])
+        self._bridge_interface.delete_bridge(box_ipaddr, bridge_name)
 
-    def _get_bridge_from(self, element):
-        return element['bridge']
+    def _delete_normal_port(self, pe):
+        box_ip = self._get_box_ipaddr_from(pe['target'])
+        bridge = self._get_bridge_from(pe['target'])
+        pt_name = self._get_port_from(pe['target'])
+        self._bridge_interface.delete_port(box_ip, bridge, pt_name)
 
-    def _get_port_from(self, element):
-        return element['port']
+    def _delete_vxlan_port_pair(self, pe):
+        self._delete_patch_port(pe['end1'], pe['end2'])
+        self._delete_patch_port(pe['end2'], pe['end1'])
 
-    def _get_sdn_control_ipaddr(self, element):
-        return element['sdn_control_ipaddr']
+    def _delet_vxlan_port(self, from_end, to_end):
+        pt_name = self._create_port_name("patch", from_end, to_end)
+        box_ip = self._get_box_ipaddr_from(from_end)
+        bridge = self._get_bridge_from(from_end)
+        self._bridge_interface.delete_port(box_ip, bridge, pt_name)
 
+    def _delete_patch_port_pair(self, pe):
+        self._delete_patch_port(pe['end1'], pe['end2'])
+        self._delete_patch_port(pe['end2'], pe['end1'])
+
+    def _delete_patch_port(self, from_end, to_end):
+        pt_name = self._create_port_name("patch", from_end, to_end)
+        box_ip = self._get_box_ipaddr_from(from_end)
+        bridge = self._get_bridge_from(from_end)
+        self._bridge_interface.delete_port(box_ip, bridge, pt_name)
 
 if __name__ == "__main__":
     tmp = "br-test"
